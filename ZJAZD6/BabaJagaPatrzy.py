@@ -33,36 +33,61 @@ Opis algorytmu:
 import cv2
 import mediapipe as mp
 
+# Inicjalizacja modułów MediaPipe
 mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
 mp_pose = mp.solutions.pose
 
+# Otwieranie kamery
 cap = cv2.VideoCapture(0)
+
+# Użycie MediaPipe Pose
 with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
     while cap.isOpened():
-        _, image = cap.read()
+        ret, image = cap.read()  # Odczyt klatki z kamery
+        if not ret:
+            print("Nie można odczytać klatki z kamery.")
+            break
 
+        # Przetwarzanie obrazu
         image.flags.writeable = False
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         results = pose.process(image)
 
-        left_eye_pos = results.pose_landmarks.landmark[1]
-        right_eye_pos = results.pose_landmarks.landmark[4]
-        between_eyes_x = ((left_eye_pos.x + right_eye_pos.x) / 2) * image.shape[1]
-        between_eyes_y = ((left_eye_pos.y + right_eye_pos.y) / 2) * image.shape[0]
+        # Sprawdzenie, czy wykryto landmarki
+        if results.pose_landmarks is not None:
+            try:
+                # Współrzędne oczu
+                left_eye_pos = results.pose_landmarks.landmark[1]
+                right_eye_pos = results.pose_landmarks.landmark[4]
+                between_eyes_x = ((left_eye_pos.x + right_eye_pos.x) / 2) * image.shape[1]
+                between_eyes_y = ((left_eye_pos.y + right_eye_pos.y) / 2) * image.shape[0]
 
-        surrender = False
-        left_wrist_y = results.pose_landmarks.landmark[15].y * image.shape[0]
-        right_wrist_y = results.pose_landmarks.landmark[16].y * image.shape[0]
-        if left_wrist_y <= between_eyes_y and right_wrist_y <= between_eyes_y:
-            surrender = True
+                # Współrzędne nadgarstków
+                left_wrist_y = results.pose_landmarks.landmark[15].y * image.shape[0]
+                right_wrist_y = results.pose_landmarks.landmark[16].y * image.shape[0]
 
-        image.flags.writeable = True
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        if not surrender:
-            cv2.circle(image, (int(between_eyes_x), int(between_eyes_y)), 10, (255, 255, 0), thickness=2, lineType=cv2.FILLED)
+                # Logika poddania się
+                surrender = False
+                if left_wrist_y <= between_eyes_y and right_wrist_y <= between_eyes_y:
+                    surrender = True
+                    print("poddaje sie")
 
+                # Rysowanie na obrazie
+                image.flags.writeable = True
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                if not surrender:
+                    cv2.circle(image, (int(between_eyes_x), int(between_eyes_y)), 10, (255, 255, 0), thickness=2, lineType=cv2.FILLED)
+            except Exception as e:
+                print(f"Błąd podczas przetwarzania landmarków: {e}")
+
+        else:
+            print("Nie wykryto postawy w bieżącej klatce.")
+
+        # Wyświetlanie obrazu
         cv2.imshow('MediaPipe Pose', cv2.flip(image, 1))
-        if cv2.waitKey(2) == 17:
+        if cv2.waitKey(2) & 0xFF == 27:  # Klawisz 'ESC' do zamknięcia
             break
+
+# Zwolnienie kamery
 cap.release()
+cv2.destroyAllWindows()
