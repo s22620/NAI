@@ -1,120 +1,83 @@
-"""
-SIECI NEURONOWE - KLASYFIKACJA ZWIERZĄT
+# TYTUŁ: System do przewidywania szansy na deszcz
+#
+# AUTORZY: Jakub Marcinkowski s21021 i  Dagmara Gibas s22620
+#
+# OPIS PROBLEMU:
+# Wyznaczenie procentowej szansy na opady deszczu na podstawie wartości ciśnienia 
+# atmosferycznego, poziomu zachmurzenia oraz wilgotności względnej
+#
+# INSTRUKCJA PRZYGOTOWANIA ŚRODOWISKA
+# zainstalować GNU Octave (version ? 3.2.4)
+# pobraĆ https://octave.sourceforge.io/fuzzy-logic-toolkit/index.html
+# zainstalować fuzzy-logic-toolkit za pomocą komendy:
+# pkg install [sciezka do pliku]/fuzzy-logic-toolkit-0.4.6.tar.gz
+# odpalić skrypt poleceniem:
+# fuzzy
 
-Autorzy: Jakub Marcinkowski s21021, Dagmara Gibas s22620
+# załadowanie biblioteki
+pkg load fuzzy-logic-toolkit
 
-Opis problemu:
-1. Wykorzystanie sieci neuronowych do rozpoznawania obrazów zwierząt z datasetu CIFAR-10.
-2. Trenowanie modelu, analiza wyników i prezentacja macierzy pomyłek.
+# utworzenie struktury danych typu FIS (Fuzzy Inference System)
+fis = newfis('Prognoza deszczu');
 
-Instrukcja:
-1. Upewnij się, że masz zainstalowany Python 3+ oraz narzędzie pip.
-2. Zainstaluj wymagane biblioteki:
-   pip install numpy
-   pip install torch
-   pip install torchvision
-   pip install sklearn
-   pip install matplotlib
-3. Uruchom skrypt:
-   python <Zadanie_2>.py
+# dodanie do struktury FIS wejścia Cisnienie wraz z funkcjami przynależności
+# przyjęty zakres wartości ciśnienia: 980-1030hPa
+fis = addvar (fis, 'input', 'Cisnienie', [980 1030]);
+fis = addmf (fis, 'input', 1, 'Male', 'trapmf', [979 980 1000 1010]);
+fis = addmf (fis, 'input', 1, 'Srednie', 'trapmf', [1000 1010 1020 1030]);
+fis = addmf (fis, 'input', 1, 'Duze', 'trapmf', [1020 1025 1030 1031]);
 
-Framework: PyTorch
-Zbiór danych: CIFAR-10
-"""
+# dodanie do struktury FIS wejścia Zachmurzenie ogolne wraz z funkcjami przynależności
+fis = addvar (fis, 'input', 'Zachmurzenie ogolne', [0 8]);
+fis = addmf (fis, 'input', 2, 'Male', 'trapmf', [-1 0 2 3]);
+fis = addmf (fis, 'input', 2, 'Srednie', 'trapmf', [2 3 5 6]);
+fis = addmf (fis, 'input', 2, 'Duze', 'trapmf', [5 6 8 9]);
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import torchvision
-import torchvision.transforms as transforms
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
-import matplotlib.pyplot as plt
+# dodanie do struktury FIS wejścia Wilgotnosc wzgledna wraz z funkcjami przynależności
+fis = addvar (fis, 'input', 'Wilgotnosc wzgledna', [0 100]);
+fis = addmf (fis, 'input', 3, 'Mala', 'trapmf', [-1 0 70 75]);
+fis = addmf (fis, 'input', 3, 'Srednia', 'trapmf', [70 75 83 85]);
+fis = addmf (fis, 'input', 3, 'Duza', 'trapmf', [83 85 100 101]);
 
-if __name__ == '__main__':
+# dodanie do struktury FIS wyjścia Szansa na deszcz wraz z funkcjami przynależności
+fis = addvar (fis, 'output', 'Szansa na deszcz', [0 100]);
+fis = addmf (fis, 'output', 1, 'Mala', 'trapmf', [0 10 30 40]);
+fis = addmf (fis, 'output', 1, 'Srednia', 'trapmf', [30 40 60 70]);
+fis = addmf (fis, 'output', 1, 'Duza', 'trapmf', [60 80 100 101]);
 
+# wyświetlenie wykresów funkcji przynależności dla wejść oraz dla wyjścia
+plotmf (fis, 'input', 1);
+plotmf (fis, 'input', 2);
+plotmf (fis, 'input', 3);
+plotmf (fis, 'output', 1);
 
-    # Ładowanie i przetwarzanie danych
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
-    batch_size = 4
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2)
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2)
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+# dodanie reguł
+# wartości parametrów:
+# parametr 1 (ciśnienie): 0 - dowolne, 1 - małe, 2 - średnie, 3 - duże
+# parametr 2 (zachmurzenie ogólne): 1 - małe, 2 - średnie, 3 - duże
+# parametr 3 (wilgotność względna): 1 - mała, 2 - średnia, 3 - duża
+# parametr 4 (szansa na deszcz): 1 - mała, 2 - średnia, 3 - duża
+# parametr 5: waga reguły
+# parametr 6: 1 - AND, 2 - OR
+fis = addrule(fis, [0 1 1 1 1 1]);
+fis = addrule(fis, [0 3 3 3 1 2]);
+fis = addrule(fis, [1 2 2 2 1 1]);
+fis = addrule(fis, [3 2 2 1 1 1]);
+fis = addrule(fis, [0 1 2 1 1 1]);
+fis = addrule(fis, [0 2 1 1 1 2]);
 
+# wyświetlenie reguł w postaci przyjaznej użytkownikowi
+showrule(fis);
 
-    # Definicja sieci neuronowej
-    class Net(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.conv1 = nn.Conv2d(3, 6, 5)
-            self.pool = nn.MaxPool2d(2, 2)
-            self.conv2 = nn.Conv2d(6, 16, 5)
-            self.fc1 = nn.Linear(16 * 5 * 5, 120)
-            self.fc2 = nn.Linear(120, 84)
-            self.fc3 = nn.Linear(84, 10)
+# obliczenie i wyświetlenie wartości wyjść dla wybranych wartości parametrów wejściowych
+puts ("\nSzansa na deszcz dla parametrow: cisnienie=1000 zachmurzenie=3 wilgotnosc=80:\n\n");
+evalfis ([1000 3 80], fis)
 
-        def forward(self, x):
+puts ("\nSzansa na deszcz dla parametrow: cisnienie=980 zachmurzenie=8 wilgotnosc=80:\n\n");
+evalfis ([980 8 80], fis)
 
-            x = self.pool(F.relu(self.conv1(x)))
-            x = self.pool(F.relu(self.conv2(x)))
-            x = torch.flatten(x, 1)  # flatten all dimensions except batch
-            x = F.relu(self.fc1(x))
-            x = F.relu(self.fc2(x))
-            x = self.fc3(x)
-            return x
+puts ("\nSzansa na deszcz dla parametrow: cisnienie=1010 zachmurzenie=4 wilgotnosc=60:\n\n");
+evalfis ([1010 4 60], fis)
 
-
-    net = Net()
-
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-
-    # Trenowanie sieci
-    for epoch in range(2):
-
-        for i, data in enumerate(trainloader, 0):
-            inputs, labels = data
-            optimizer.zero_grad()
-            outputs = net(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-
-    print('Finished Training')
-
-    # Testowanie modelu
-    dataiter = iter(testloader)
-    images, labels = next(dataiter)
-    outputs = net(images)
-    _, predicted = torch.max(outputs, 1)
-
-    correct = 0
-    total = 0
-    predicted_labels = []
-    true_labels = []
-
-    with torch.no_grad():
-        for data in testloader:
-            images, labels = data
-            outputs = net(images)
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-            predicted_labels.extend(predicted.tolist())
-            true_labels.extend(labels.tolist())
-
-    print("#" * 40)
-    print("\nClassifier performance on test dataset\n")
-    print(classification_report(true_labels, predicted_labels))
-    print("#" * 40 + "\n")
-# Ocena wyników
-    cm = confusion_matrix(true_labels, predicted_labels, normalize='all')
-    cmd = ConfusionMatrixDisplay(cm, display_labels=classes)
-    fig, ax = plt.subplots(figsize=(10, 10))
-    cmd.plot(ax=ax)
-    plt.show()
+puts ("\nSzansa na deszcz dla parametrow: cisnienie=1000 zachmurzenie=8 wilgotnosc=70:\n\n");
+evalfis ([1000 8 70], fis)
